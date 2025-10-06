@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
 Praxion 0.1 - USB Malware Scanner & Cleaner (Enhanced Detection)
+Copyright (c) 2025 praveen k
+this program is the free software : you can redistribute it and / or modify it under the MIT LICENSE
+
+Features:
 - Enhanced YARA rules for common malware patterns
 - Expanded fallback heuristics with additional suspicious patterns
 - Improved PE analysis with more suspicious API detection
@@ -1382,4 +1386,5 @@ def main():
                 pass
 
 if __name__ == "__main__":
+
     main()
