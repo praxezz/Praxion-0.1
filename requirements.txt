@@ -11,7 +11,7 @@ pefile>=2023.2.7             # PE file analysis and inspection
 yara-python>=4.3.1           # YARA rule matching for malware detection
 psutil>=5.9.0                # System and drive detection utilities
 ssdeep>=3.4                  # Fuzzy hashing for similarity analysis
-
+vt-py>=0.8.0                 #virustotal API 
 # REAL-TIME MONITORING DEPENDENCIES
 # ===================================================
 watchdog>=3.0.0              # File system event monitoring
@@ -46,4 +46,5 @@ watchdog>=3.0.0              # File system event monitoring
 # python -m venv praxion_env
 # source praxion_env/bin/activate  # Linux/macOS
 # praxion_env\Scripts\activate     # Windows
+
 # pip install -r requirements.txt
