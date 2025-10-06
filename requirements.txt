@@ -1,0 +1,49 @@
+# Praxion USB Malware Scanner - Complete Requirements
+# ===================================================
+
+# CORE DEPENDENCIES (Essential for basic functionality)
+# ===================================================
+colorama>=0.4.4              # Cross-platform colored terminal output
+pefile>=2023.2.7             # PE file analysis and inspection
+
+# ENHANCED DETECTION DEPENDENCIES
+# ===================================================
+yara-python>=4.3.1           # YARA rule matching for malware detection
+psutil>=5.9.0                # System and drive detection utilities
+ssdeep>=3.4                  # Fuzzy hashing for similarity analysis
+
+# REAL-TIME MONITORING DEPENDENCIES
+# ===================================================
+watchdog>=3.0.0              # File system event monitoring
+
+# SYSTEM-SPECIFIC INSTALLATION NOTES:
+# ===================================================
+# For Linux systems (Ubuntu/Debian):
+#   sudo apt-get install libyara-dev python3-dev
+#
+# For Windows systems:
+#   No additional system packages required
+#
+# For macOS:
+#   brew install yara
+
+# INSTALLATION COMMANDS:
+# ===================================================
+# Basic installation (core functionality only):
+#   pip install colorama pefile
+#
+# Standard installation (core + enhanced detection):
+#   pip install colorama pefile yara-python psutil ssdeep
+#
+# Full installation (all features including real-time monitoring):
+#   pip install -r requirements.txt
+#
+# Development installation (with testing dependencies):
+#   pip install -r requirements.txt pytest
+
+# VIRTUAL ENVIRONMENT SETUP:
+# ===================================================
+# python -m venv praxion_env
+# source praxion_env/bin/activate  # Linux/macOS
+# praxion_env\Scripts\activate     # Windows
+# pip install -r requirements.txt

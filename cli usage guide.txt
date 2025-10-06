@@ -1,0 +1,89 @@
+═══════════════════════════════════════════════════════════════════════════════
+CLI USAGE GUIDE
+═══════════════════════════════════════════════════════════════════════════════
+
+BASIC COMMANDS:
+--------------
+  python praxion.py                     # Normal mode - auto-scan USB drives
+  python praxion.py --test              # Test mode - create & scan test samples
+  python praxion.py --debug             # Debug mode - detailed logging
+  python praxion.py --mode auto-delete  # Auto-delete originals after quarantine
+
+OPERATION MODES (--mode):
+------------------------
+  --mode run           # Normal operation (default)
+  --mode test          # Create test samples and scan them
+  --mode debug         # Enable debug logging
+  --mode auto-delete   # Delete originals after quarantine
+
+LEGACY FLAGS (Alternative syntax):
+----------------------------------
+  --test                      # Same as --mode test
+  --debug                     # Same as --mode debug
+  --auto-delete-original      # Same as --mode auto-delete
+
+POLLING CONFIGURATION:
+---------------------
+  --poll-interval 5           # Set USB polling interval in seconds (default: 2)
+
+VIRUSTOTAL INTEGRATION:
+----------------------
+  --virustotal                              # Enable VirusTotal scanning
+  --vt-api-key YOUR_API_KEY                 # Provide VirusTotal API key
+  --vt-scan-timeout 60                      # Set VT timeout (default: 30s)
+
+COMBINED USAGE EXAMPLES:
+-----------------------
+  # Test mode with debug logging
+  python praxion.py --test --debug
+
+  # Normal mode with VirusTotal integration
+  python praxion.py --virustotal --vt-api-key abc123xyz
+
+  # Debug mode with custom polling interval
+  python praxion.py --debug --poll-interval 5
+
+  # Auto-delete with VirusTotal and custom timeout
+  python praxion.py --mode auto-delete --virustotal --vt-api-key abc123 --vt-scan-timeout 60
+
+  # Full feature mode
+  python praxion.py --debug --virustotal --vt-api-key YOUR_KEY --poll-interval 3
+
+ENVIRONMENT VARIABLES:
+---------------------
+  # Linux/Mac
+  export VIRUSTOTAL_API_KEY="your_api_key_here"
+  python praxion.py --virustotal
+
+  # Windows (Command Prompt)
+  set VIRUSTOTAL_API_KEY=your_api_key_here
+  python praxion.py --virustotal
+
+  # Windows (PowerShell)
+  $env:VIRUSTOTAL_API_KEY="your_api_key_here"
+  python praxion.py --virustotal
+
+OUTPUT LOCATIONS:
+----------------
+  logs/          - Scan logs, history, and threat explanations
+  suspicious/    - Quarantined malicious files with evidence JSON
+
+RECOMMENDED USAGE PATTERNS:
+--------------------------
+  For testing:
+    python praxion.py --test --debug
+
+  For production (basic):
+    python praxion.py
+
+  For production (with VirusTotal):
+    python praxion.py --virustotal --vt-api-key YOUR_KEY
+
+  For maximum security:
+    python praxion.py --mode auto-delete --virustotal --vt-api-key YOUR_KEY --debug
+
+HELP COMMAND:
+------------
+  python praxion.py --help              # Display all available options
+
+═══════════════════════════════════════════════════════════════════════════════
