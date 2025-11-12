@@ -68,7 +68,33 @@ if args.poll_interval is not None:
     except Exception:
         pass
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+# Cross-platform directory setup
+def get_app_directory():
+    """Get appropriate application directory based on platform and permissions"""
+    script_dir = os.path.abspath(os.path.dirname(__file__))
+    
+    # Try to use script directory first
+    try:
+        test_file = os.path.join(script_dir, '.praxion_test')
+        with open(test_file, 'w') as f:
+            f.write('test')
+        os.remove(test_file)
+        return script_dir
+    except (PermissionError, OSError):
+        pass
+    
+    # Fall back to user home directory
+    home = os.path.expanduser("~")
+    if sys.platform.startswith("win"):
+        app_dir = os.path.join(home, "AppData", "Local", "Praxion")
+    elif sys.platform == "darwin":
+        app_dir = os.path.join(home, "Library", "Application Support", "Praxion")
+    else:  # Linux and other Unix-like
+        app_dir = os.path.join(home, ".praxion")
+    
+    return app_dir
+
+BASE_DIR = get_app_directory()
 LOG_DIR = os.path.join(BASE_DIR, "logs")
 LOG_FILE = os.path.join(LOG_DIR, "scan_log.txt")
 DEBUG_LOG_FILE = os.path.join(LOG_DIR, "scan_debug.txt")
@@ -89,9 +115,19 @@ CURRENT_PLATFORM = platform.system().lower()
 if CURRENT_PLATFORM == "darwin":
     CURRENT_PLATFORM = "mac"
 
-# ensure folders exist
-os.makedirs(LOG_DIR, exist_ok=True)
-os.makedirs(QUARANTINE_DIR, exist_ok=True)
+# ensure folders exist with proper error handling
+try:
+    os.makedirs(LOG_DIR, exist_ok=True)
+    os.makedirs(QUARANTINE_DIR, exist_ok=True)
+except PermissionError:
+    print(f"ERROR: Permission denied. Cannot create directories in {BASE_DIR}")
+    print(f"Please run with appropriate permissions or check directory ownership:")
+    print(f"  Linux/Mac: sudo chown -R $USER:$USER {os.path.dirname(__file__)}")
+    print(f"  Or run from a writable directory")
+    sys.exit(1)
+except Exception as e:
+    print(f"ERROR: Failed to create required directories: {e}")
+    sys.exit(1)
 
 # ---------------- Color setup ----------------
 try:
@@ -1630,7 +1666,7 @@ BANNER = r"""
 ██║     ██║  ██║██║  ██║██╔╝ ██╗██║╚██████╔╝██║ ╚████║    ╚██████╔╝██╗██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝     ╚═════╝ ╚═╝╚═╝
                                                                           
- Commonn Malware Detection - Version 0.2     
+ Common Malware Detection - Version 0.1     
  Windows PE | Linux ELF | macOS Mach-O | Cross-Platform Scripts
  Scanning USB & removable drives in real-time   
  Optional VirusTotal API integration        
@@ -1706,6 +1742,12 @@ def main():
     global VIRUSTOTAL_ENABLED
     
     print(BANNER)
+    
+    # Display directory locations
+    info(f"Working directory: {BASE_DIR}")
+    info(f"Log directory: {LOG_DIR}")
+    info(f"Quarantine directory: {QUARANTINE_DIR}")
+    
     ensure_dependencies()
     load_builtin_rules()
     
